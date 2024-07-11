@@ -1,0 +1,1 @@
+/home/boxfish/mydir/2024G-RT/RayTracer/target/debug/ray_tracer: /home/boxfish/mydir/2024G-RT/RayTracer/src/color.rs /home/boxfish/mydir/2024G-RT/RayTracer/src/main.rs /home/boxfish/mydir/2024G-RT/RayTracer/src/ray.rs /home/boxfish/mydir/2024G-RT/RayTracer/src/vec3.rs
