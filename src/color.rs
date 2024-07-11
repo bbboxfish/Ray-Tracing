@@ -5,3 +5,4 @@ pub fn write_color(pixel_color: [u8; 3], img: &mut RgbImage, i: usize, j: usize)
     *pixel = image::Rgb(pixel_color);
     // Write the translated [0,255] value of each color component.
 }
+

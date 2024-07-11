@@ -3,6 +3,7 @@ use std::ops::{Add, AddAssign};
 use std::ops::{Sub, SubAssign};
 use std::ops::{Mul, MulAssign};
 use std::ops::{Div, DivAssign};
+use crate::util::{random_double,random_double_range};
 use std::ops::Neg;
 #[derive(Clone, Debug, PartialEq,Copy)]
 #[derive(Default)]
@@ -69,6 +70,27 @@ impl Vec3 {
             y: (y),
             z: (z),
         }
+    }
+
+    pub fn random() -> Self {
+        Self { x:random_double(), y:random_double(), z:random_double() }
+    }
+        
+    pub fn random_range(min: f64, max: f64) -> Self {
+        Self { x:random_double_range(min, max), y:random_double_range(min, max), z:random_double_range(min, max)}
+    }
+
+    pub fn random_in_unit_sphere() -> Vec3 {
+        loop{//无限循环
+            let p = Vec3::random_range(-1.0, 1.0);
+            if p.squared_length() < 1.0 {
+                return p;
+            }
+        }
+    }
+
+    pub fn random_unit_vector() -> Vec3 {
+        return Vec3::unit_vector(Vec3::random_in_unit_sphere());
     }
 
     pub fn info(&self) {
