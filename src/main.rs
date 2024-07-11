@@ -4,7 +4,9 @@ mod ray;
 mod sphere;
 mod hittable;
 mod hittable_list;
+use hittable_list::HittableList;
 use hittable::{HitRecord, Hittable};
+use sphere::Sphere;
 use ray::Ray;
 use vec3::{Color,Point3,Vec3};
 use color::write_color;
@@ -12,6 +14,7 @@ use image::{ImageBuffer, RgbImage}; //接收render传回来的图片，在main�
 use indicatif::ProgressBar;
 use std::f64::INFINITY;
 use std::fs::File;
+use std::sync::Arc;
 use std::rc::Rc;
 const AUTHOR: &str = "box fish";
 
@@ -19,93 +22,55 @@ fn is_ci() -> bool {
     option_env!("CI").unwrap_or_default() == "true"
 }
 
-//image 3,4
-fn hit_sphere(center: Point3, radius: f64, r: &Ray) -> f64 {
-    let oc = center - r.ori;
-    let a = Vec3::dot(r.dir, r.dir);
-    let b = -2.0 * Vec3::dot(r.dir,oc);
-    let c = Vec3::dot(oc,oc) - radius * radius;
-    let discriminant = b * b - 4.0 * a * c;
-    if discriminant < 0.0 {
-        -1.0
-    } else {
-        (-b - discriminant.sqrt()) / (2.0 * a)
-    }
-}
-// fn ray_color(r: &Ray) -> Color {
-//     if hit_sphere(Point3::new(0.0, 0.0, -1.0), 0.5, r) {
-//         return Vec3::new(171.0/255.0, 132.0/255.0, 1.0); // Red color
-//     }
-//     let unit_direction = Vec3::unit_vector(r.dir);
-//     let t = 0.5 * (unit_direction.y() + 1.0);
-//     Color::new(
-//         (1.0 - t) * 1.0 + t * 0.5,
-//         (1.0 - t) * 1.0 + t * 0.7,
-//         (1.0 - t) * 1.0 + t * 1.0,
-//     )
-// }
-fn ray_color(r: &Ray) -> Color {
-    let t = hit_sphere(Point3::new(0.0, 0.0, -1.0), 0.5, r);
-    if t > 0.0 {
-        let n = Vec3::unit_vector(r.at(t) - Vec3::new(0.0, 0.0, -1.0));
-        return Color::new(n.x() + 1.0, n.y() + 1.0, n.z() + 1.0) * 0.5;
+fn ray_color(r:&Ray,world :&dyn Hittable) -> Color {
+    let mut rec = HitRecord::default();
+    if world.hit(r,0.0,INFINITY,&mut rec) {
+        return 0.5 * (rec.normal + Color::new(1.0, 1.0, 1.0));
     }
     let unit_direction = Vec3::unit_vector(r.dir);
-    let a = 0.5 * (unit_direction.y() + 1.0);
-    Color::new(1.0, 1.0, 1.0) * (1.0 - a) + Color::new(0.5, 0.7, 1.0) * a
+    let t = 0.5 * (unit_direction.y() + 1.0);
+    (1.0 - t) * Color::new(1.0, 1.0, 1.0) + t * Color::new(0.5, 0.7, 1.0)
 }
-// fn ray_color(r: &Ray) -> Color {
-//     let unit_direction = Vec3::unit_vector(r.dir);
-//     let t = 0.5 * (unit_direction.y() + 1.0);
-//     let white = Color::new(1.0, 1.0, 1.0);
-//     let blue = Color::new(0.5, 0.7, 1.0);
-//     Color::new(
-//         (1.0 - t) * white.x + t * blue.x,
-//         (1.0 - t) * white.y + t * blue.y,
-//         (1.0 - t) * white.z + t * blue.z,
-//     )
-// }
-
-// fn ray_color(r:&Ray,world :&dyn Hittable) -> Color {
-//     let mut rec = HitRecord::default();
-//     if world.hit(r,0.0,INFINITY,&mut rec) {
-//         return 0.5 * (rec.normal + Color::new(1.0, 1.0, 1.0));
-//     }
-//     let unit_direction = Vec3::unit_vector(r.dir);
-//     let t = 0.5 * (unit_direction.y() + 1.0);
-//     (1.0 - t) * Color::new(1.0, 1.0, 1.0) + t * Color::new(0.5, 0.7, 1.0)
-// }
 fn main() {
     let path = "output/test.jpg";
-    let width = 800;
-    let height = 450;
+    let image_width = 800;
+    let image_height = 450;
     let quality = 60;
     let bar: ProgressBar = if is_ci() {
         ProgressBar::hidden()
     } else {
-        ProgressBar::new((height * width) as u64)
+        ProgressBar::new((image_height * image_width) as u64)
     };
 
-    let mut img: RgbImage = ImageBuffer::new(width, height);
+    let mut img: RgbImage = ImageBuffer::new(image_width, image_height);
 
     let viewport_height = 2.0;
     let aspect_ratio = 16.0 / 9.0;
     let viewport_width = aspect_ratio * viewport_height;
     let focal_length = 1.0;
+    
+    let mut world = HittableList::default();
+    world.add(Arc::new(Sphere::new(Point3::new(0.0, 0.0, -1.0),0.5,)));
+    world.add(Arc::new(Sphere::new(Point3::new(0.0, -100.5, -1.0),100.0,)));
+    
+    let camera_center = Point3::zero();
+    //计算视窗边缘的矢量
+    let viewport_u = Vec3::new(viewport_width, 0.0, 0.0);
+    let viewport_v = Vec3::new(0.0, -viewport_height, 0.0);
+    //像素之间的增量
+    let pixel_delta_u = viewport_u / image_width as f64;
+    let pixel_delta_v = viewport_v / image_height as f64;
 
-    let origin = Point3::new(0.0, 0.0, 0.0);
-    let horizontal = Vec3::new(viewport_width, 0.0, 0.0);
-    let vertical = Vec3::new(0.0, viewport_height, 0.0);
-    let lower_left_corner = origin - horizontal / 2.0 - vertical / 2.0 - Vec3::new(0.0, 0.0, focal_length);
-    for i in 0..width {
-        for j in 0..height {
-            let u = i as f64 / (width - 1) as f64;
-            let v = j as f64 / (height - 1) as f64;
-            let r = Ray::new(
-                origin,
-                lower_left_corner + horizontal * u + vertical * v - origin,
-            );
-            let color_vec = ray_color(&r);
+    let viewport_upper_left = camera_center
+                             - Vec3::new(0.0, 0.0, focal_length) - viewport_u/2.0 - viewport_v/2.0;
+    let pixel00_loc = viewport_upper_left + 0.5 * (pixel_delta_u + pixel_delta_v);
+
+    for i in 0..image_width {
+        for j in 0..image_height {
+            let pixel_center = pixel00_loc + i as f64 * pixel_delta_u + j as f64 * pixel_delta_v;
+            let ray_direction = pixel_center - camera_center;
+            let r = Ray::new(camera_center, ray_direction);
+            let color_vec = ray_color(&r,&world);
             let pixel_color = [
                 (color_vec.x * 255.999) as u8,
                 (color_vec.y * 255.999) as u8,
