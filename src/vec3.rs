@@ -93,6 +93,26 @@ impl Vec3 {
         return Vec3::unit_vector(Vec3::random_in_unit_sphere());
     }
 
+    pub fn random_on_hemisphere(normal: Vec3) -> Vec3 {
+        let on_unit_sphere = Self::random_in_unit_sphere();
+        if Self::dot(on_unit_sphere, normal) > 0.0 {
+           on_unit_sphere
+        } else {
+           -on_unit_sphere
+        }
+    }
+    
+    pub fn reflect(v: Vec3, n: Vec3) -> Vec3 {//反射函数
+        v - 2.0 * Self::dot(v, n) * n
+    }
+
+    pub fn refract(uv: Vec3, n: Vec3, etai_over_etat: f64) -> Vec3 {
+        let cos_theta = Self::dot(-uv, n).min(1.0);
+        let r_out_perp = etai_over_etat * (uv + cos_theta * n);
+        let r_out_parallel = -(1.0 - r_out_perp.squared_length()).abs().sqrt() * n;
+        r_out_perp + r_out_parallel
+    }
+    
     pub fn info(&self) {
         println!("x={},y={},z={}", self.x, self.y, self.z);
     }

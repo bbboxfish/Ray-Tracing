@@ -2,12 +2,15 @@ use crate::ray::Ray;
 use crate::vec3::Point3;
 use crate::vec3::Vec3;
 use crate::interval::Interval;
+use crate::material::Material;
+use std::sync::Arc;
 #[derive(Default,Clone)]
 pub struct HitRecord {
     pub p : Point3,
     pub normal : Vec3,
     pub t : f64,//交点处光线的t值
     pub front_face : bool,
+    pub mat: Option<Arc<dyn Material>>,
 }
 impl HitRecord {
     pub fn set_face_normal(&mut self, r: &Ray, outward_normal: Vec3) {

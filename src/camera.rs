@@ -2,10 +2,13 @@ use crate::vec3::{Vec3,Point3,Color};
 use crate::hittable::{Hittable,HitRecord};
 use crate::ray::Ray;
 use crate::interval::Interval;
-use crate::color::write_color;
+use crate::color::{self, linear_to_gamma, write_color};
 use crate::util::{random_double};
-use image::{ImageBuffer, RgbImage}; //接收render传回来的图片，在main中文件输出
-use indicatif::ProgressBar;
+use image::{ImageBuffer, RgbImage,Rgb}; //接收render传回来的图片，在main中文件输出
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use rand::{rngs::ThreadRng, Rng};
+use std::sync::{Arc, Mutex};
+use std::thread;
 pub const INFINITY: f64 = std::f64::INFINITY;
 use std::fs::File;
 const INTENSITY: Interval = Interval{ min: 0.0, max: 0.999 };
@@ -19,6 +22,7 @@ pub struct Camera {
     pixel_delta_u: Vec3,    // 向右增量
     pixel_delta_v: Vec3,    // 向下增量
     pub samples_per_pixel: usize, //每个像素的随机样本计数
+    pub max_depth: i32,//反射次数上限
 }
 impl Default for Camera {
     fn default() -> Self {
@@ -31,14 +35,25 @@ impl Default for Camera {
             pixel_delta_u: Vec3::default(),
             pixel_delta_v: Vec3::default(),
             samples_per_pixel: 10,
+            max_depth: 10,
         }
     }
 }
 impl Camera {
-    fn ray_color(r:&Ray,world :&dyn Hittable) -> Color {
+    fn ray_color(r:&Ray,depth: i32,world :&dyn Hittable) -> Color {
         let mut rec = HitRecord::default();
-        if world.hit(r, &Interval::new(0.0,INFINITY),&mut rec) {
-            return 0.5 * (rec.normal + Color::new(1.0, 1.0, 1.0));
+        if depth <= 0 {
+            return Color::default();
+        }
+        if world.hit(r, &Interval::new(0.001,INFINITY),&mut rec) {
+            let mut scattered = Ray::default();
+            let mut attenuation = Color::default();
+            if let Some(mat) = rec.mat.clone() {
+                if mat.scatter(r, &rec, &mut attenuation, &mut scattered) {
+                    return attenuation * Self::ray_color(&scattered, depth - 1, world);
+                }
+            }
+            return Color::default();
         }
         let unit_direction = Vec3::unit_vector(r.dir);
         let t = 0.5 * (unit_direction.y() + 1.0);
@@ -111,8 +126,11 @@ impl Camera {
                 let mut color_vec = Vec3::zero();
                 for _ in 0..self.samples_per_pixel {
                     let r = self.get_ray(i, j);
-                    color_vec += Self::ray_color(&r, world)/self.samples_per_pixel as f64;
+                    color_vec += Self::ray_color(&r,self.max_depth, world)/self.samples_per_pixel as f64;
                 }
+                color_vec.x = linear_to_gamma(color_vec.x);
+                color_vec.y = linear_to_gamma(color_vec.y);
+                color_vec.z = linear_to_gamma(color_vec.z);
                 let pixel_color = [
                     (color_vec.x * 255.999) as u8,
                     (color_vec.y * 255.999) as u8,
@@ -136,4 +154,54 @@ impl Camera {
             Err(_) => println!("Outputting image fails."),
         }
     }
+    // pub fn multi_render(&mut self, world: &dyn Hittable,thread_num:usize) {
+    //     self.initialize();
+
+    //     let path = "output/fast.jpg";
+    //     let quality = 60;
+        // let bar: ProgressBar = if Self::is_ci() {
+        //     ProgressBar::hidden()
+        // } else {
+        //     ProgressBar::new((self.image_height * self.image_width) as u64)
+        // };
+        //多线程：
+        // let multipb = MultiProgress::new();
+        // let mut img: RgbImage = ImageBuffer::new(self.image_width, self.image_height);
+        // let image = Arc::new(Mutex::new(img));
+        // let cam = Arc::new(self);
+        // let mut handles = vec![];
+        // for index in 0..thread_num {
+        //     let c = Arc::clone(&cam);
+        //     let image = Arc::clone(&image);
+            
+        // }
+        // for i in 0..self.image_width {
+        //     for j in 0..self.image_height {
+        //         let pixel_center = self.pixel00_loc + i as f64 * self.pixel_delta_u + j as f64 * self.pixel_delta_v;
+        //         let ray_direction = pixel_center - self.center;
+        //         let r = Ray::new(self.center, ray_direction);
+        //         // let color_vec = Self::ray_color(&r,world);
+        //         let mut color_vec = Vec3::zero();
+        //         for _ in 0..self.samples_per_pixel {
+        //             let r = self.get_ray(i, j);
+        //             color_vec += Self::ray_color(&r, world)/self.samples_per_pixel as f64;
+        //         }
+        //         let pixel_color = [
+        //             (color_vec.x * 255.999) as u8,
+        //             (color_vec.y * 255.999) as u8,
+        //             (color_vec.z * 255.999) as u8,
+        //         ];
+        //         write_color(pixel_color, &mut img, i as usize, j as usize);
+        //         bar.inc(1);
+        //     }
+        // }
+        // bar.finish();
+        // println!("Ouput image as \"{}\"\n Author: {}", path, AUTHOR);
+        // let output_image: image::DynamicImage = image::DynamicImage::ImageRgb8(img);
+        // let mut output_file: File = File::create(path).unwrap();
+        // match output_image.write_to(&mut output_file, image::ImageOutputFormat::Jpeg(quality)) {
+        //     Ok(_) => {}
+        //     Err(_) => println!("Outputting image fails."),
+        // }
+    // }
 }
