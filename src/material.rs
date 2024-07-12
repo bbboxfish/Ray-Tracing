@@ -2,6 +2,7 @@ use crate::hittable::HitRecord;
 use crate::ray::Ray;
 use crate::vec3::Vec3;
 use crate::Color;
+use crate::util::random_double;
 pub trait Material: Send + Sync {
     fn scatter(
         &self,
@@ -64,6 +65,14 @@ impl Dielectric {
         ir: index_of_refraction,
       }
     }
+
+    fn reflectance(cosine: f64, ref_idx: f64) -> f64 {
+        //Schlick近似计算玻璃反射系数
+        let r0 = (1.0 - ref_idx) / (1.0 + ref_idx);
+        let r0 = r0 * r0;
+        r0 + (1.0 - r0) * (1.0 - cosine).powf(5.0)
+    }
+        
 }
   
 impl Material for Dielectric {
@@ -72,9 +81,18 @@ impl Material for Dielectric {
         let refraction_ratio = if rec.front_face { 1.0 / self.ir } else { self.ir };
 
         let unit_direction = Vec3::unit_vector(r_in.dir);
-        let refracted = Vec3::refract(unit_direction, rec.normal, refraction_ratio);
+        // let refracted = Vec3::refract(unit_direction, rec.normal, refraction_ratio);
+        let cos_theta = Vec3::dot(-unit_direction, rec.normal).min(1.0);
+        let sin_theta = (1.0 - cos_theta * cos_theta).sqrt();
+ 
+        let cannot_refract = refraction_ratio * sin_theta > 1.0;
+        let direction = if cannot_refract || Self::reflectance(cos_theta, refraction_ratio) > random_double() {
+            Vec3::reflect(unit_direction, rec.normal)
+        } else {
+            Vec3::refract(unit_direction, rec.normal, refraction_ratio)
+        };
 
-        *scattered = Ray::new(rec.p, refracted);
+        *scattered = Ray::new(rec.p, direction);
         true
     }
 }

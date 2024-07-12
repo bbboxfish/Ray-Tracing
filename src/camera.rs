@@ -9,6 +9,7 @@ use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use rand::{rngs::ThreadRng, Rng};
 use std::sync::{Arc, Mutex};
 use std::thread;
+use crate::util;
 pub const INFINITY: f64 = std::f64::INFINITY;
 use std::fs::File;
 const INTENSITY: Interval = Interval{ min: 0.0, max: 0.999 };
@@ -23,6 +24,13 @@ pub struct Camera {
     pixel_delta_v: Vec3,    // 向下增量
     pub samples_per_pixel: usize, //每个像素的随机样本计数
     pub max_depth: i32,//反射次数上限
+    pub vfov: f64,//垂直视角
+    pub lookfrom: Point3,  
+    pub lookat: Point3,
+    pub vup: Vec3,  
+    pub u: Vec3,
+    pub v: Vec3,
+    pub w: Vec3,
 }
 impl Default for Camera {
     fn default() -> Self {
@@ -36,6 +44,13 @@ impl Default for Camera {
             pixel_delta_v: Vec3::default(),
             samples_per_pixel: 10,
             max_depth: 10,
+            vfov: 90.0,
+            lookfrom: Point3::new(0.0, 0.0, 0.0),
+            lookat: Point3::new(0.0, 0.0, -1.0),
+            vup: Vec3::new(0.0,1.0,0.0),
+            u:Vec3::default(),
+            v:Vec3::default(),
+            w:Vec3::default(),
         }
     }
 }
@@ -63,15 +78,22 @@ impl Camera {
     fn initialize(&mut self) {
         self.image_height = 450;
 
-        self.center = Point3::default();
+        self.center = self.lookfrom;
+        let focal_length = (self.lookfrom - self.lookat).length();
 
-        let focal_length = 1.0;
-        let viewport_height = 2.0;
+        self.w = Vec3::unit_vector(self.lookfrom-self.lookat);
+        self.u = Vec3::unit_vector(Vec3::cross(self.vup, self.w));
+        self.v = Vec3::cross(self.w, self.u);
+
+        let theta = util::degrees_to_radians(self.vfov);
+        let h = (theta / 2.0).tan();
+        let viewport_height = 2.0 * h * focal_length;
+
         let viewport_width = viewport_height * (self.image_width as f64 / self.image_height as f64);
 
         //计算视窗边缘的矢量
-        let viewport_u = Vec3::new(viewport_width, 0.0, 0.0);
-        let viewport_v = Vec3::new(0.0, -viewport_height, 0.0);
+        let viewport_u = self.u * viewport_width;
+        let viewport_v = -self.v * viewport_height;
 
         //像素之间的增量
         self.pixel_delta_u = viewport_u / self.image_width as f64;
@@ -79,7 +101,7 @@ impl Camera {
 
         //计算左上角像素
         let viewport_upper_left = self.center
-            - Vec3::new(0.0, 0.0, focal_length) - viewport_u / 2.0 - viewport_v / 2.0;
+            - (focal_length * self.w) - viewport_u / 2.0 - viewport_v / 2.0;
         self.pixel00_loc = viewport_upper_left + 0.5 * (self.pixel_delta_u + self.pixel_delta_v);
     }
 

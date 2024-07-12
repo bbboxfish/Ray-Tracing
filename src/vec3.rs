@@ -61,7 +61,7 @@ impl Vec3 {
 
     //叉乘
     //a = Vec3::new(1.0,2.0,3.0)，b = Vec3::new(1.0,2.0,3.0), (a.cross(b) == Vec3::zero()) = True
-    pub fn cross(&self, other: Vec3) -> Self {
+    pub fn cross(self, other: Vec3) -> Vec3 {
         let x = self.y * other.z - self.z * other.y;
         let y = self.z * other.x - self.x * other.z;
         let z = self.x * other.y - self.y * other.x;
