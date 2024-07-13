@@ -31,6 +31,10 @@ pub struct Camera {
     pub u: Vec3,
     pub v: Vec3,
     pub w: Vec3,
+    pub defocus_angle: f64,
+    pub focus_dist: f64,
+    defocus_disk_u: Vec3,
+    defocus_disk_v: Vec3,
 }
 impl Default for Camera {
     fn default() -> Self {
@@ -51,6 +55,10 @@ impl Default for Camera {
             u:Vec3::default(),
             v:Vec3::default(),
             w:Vec3::default(),
+            defocus_angle: 0.0,
+            focus_dist: 0.0,
+            defocus_disk_u: Vec3::default(),
+            defocus_disk_v: Vec3::default(),
         }
     }
 }
@@ -79,7 +87,7 @@ impl Camera {
         self.image_height = 450;
 
         self.center = self.lookfrom;
-        let focal_length = (self.lookfrom - self.lookat).length();
+        // let focal_length = (self.lookfrom - self.lookat).length();
 
         self.w = Vec3::unit_vector(self.lookfrom-self.lookat);
         self.u = Vec3::unit_vector(Vec3::cross(self.vup, self.w));
@@ -87,7 +95,7 @@ impl Camera {
 
         let theta = util::degrees_to_radians(self.vfov);
         let h = (theta / 2.0).tan();
-        let viewport_height = 2.0 * h * focal_length;
+        let viewport_height = 2.0 * h * self.focus_dist;
 
         let viewport_width = viewport_height * (self.image_width as f64 / self.image_height as f64);
 
@@ -101,8 +109,11 @@ impl Camera {
 
         //计算左上角像素
         let viewport_upper_left = self.center
-            - (focal_length * self.w) - viewport_u / 2.0 - viewport_v / 2.0;
+            - (self.focus_dist * self.w) - viewport_u / 2.0 - viewport_v / 2.0;
         self.pixel00_loc = viewport_upper_left + 0.5 * (self.pixel_delta_u + self.pixel_delta_v);
+        let defocus_radius = self.focus_dist * (util::degrees_to_radians(self.defocus_angle / 2.0)).tan();
+        self.defocus_disk_u = self.u * defocus_radius;
+        self.defocus_disk_v = self.v * defocus_radius;
     }
 
     pub fn is_ci() -> bool {
@@ -115,12 +126,22 @@ impl Camera {
         px * self.pixel_delta_u + py * self.pixel_delta_v
     }
 
+    fn defocus_disk_sample(&self) -> Point3 {
+        let p = Vec3::random_in_unit_disk();
+        self.center + p.x() * self.defocus_disk_u + p.y() * self.defocus_disk_v
+    }
+
+
     pub fn get_ray(&self, i: u32, j: u32) -> Ray {
         // Get a randomly sampled camera ray for the pixel at location i,j.
         let pixel_center = self.pixel00_loc + i as f64 * self.pixel_delta_u + j as f64 * self.pixel_delta_v;
         let pixel_sample = pixel_center + self.sample_square();
     
-        let ray_origin = self.center;
+        let ray_origin = if self.defocus_angle <= 0.0 {
+            self.center
+        } else {
+            self.defocus_disk_sample()
+        };
         let ray_direction = pixel_sample - ray_origin;
     
         Ray::new(ray_origin, ray_direction)
