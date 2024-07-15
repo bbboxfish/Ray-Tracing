@@ -1,6 +1,7 @@
-use image::ImageBuffer;
 use crate::vec3::Point3;
 use crate::vec3::*;
+use crate::rtw_stb_image::RtwImage;
+use crate::perlin::Perlin;
 use std::sync::Arc;
 
 pub trait Texture {
@@ -18,11 +19,6 @@ impl SolidColor {
         }
     }
 
-    pub fn new_with_rgb(red: f64, green: f64, blue: f64) -> Self {
-        Self {
-            color_value: Color::new(red, green, blue),
-        }
-    }
 }
 
 impl Texture for SolidColor {
@@ -68,5 +64,52 @@ impl Texture for CheckerTexture {
         } else {
             self.odd.value(u, v, p)
         }
+    }
+}
+
+pub struct ImageTexture {
+    image: RtwImage,
+}
+
+impl ImageTexture {
+    pub fn new(filename: &str) -> Self {
+        Self {
+            image: RtwImage::new(filename),
+        }
+    }
+}
+
+impl Texture for ImageTexture {
+    fn value(&self, u: f64, v: f64, _p: Point3) -> Color {
+        //如果没有纹理 返回青色
+        if self.image.height() == 0 {
+            return Color::new(0.0, 1.0, 1.0);
+        }
+
+        //输入坐标限制在[0,1]x[1,0]
+        let u = u.clamp(0.0, 1.0);
+        let v = 1.0 - v.clamp(0.0, 1.0);//翻转V到图像坐标
+
+        let i = (u * self.image.width() as f64) as usize;
+        let j = (v * self.image.height() as f64) as usize;
+        let pixel = self.image.pixel_data(i, j);
+
+        let color_scale = 1.0 / 255.0;
+        Color::new(
+            color_scale * pixel[0] as f64,
+            color_scale * pixel[1] as f64,
+            color_scale * pixel[2] as f64,
+        )
+    }
+}
+
+#[derive(Default)]
+pub struct NoiseTexture {
+    noise: Perlin,
+}
+
+impl Texture for NoiseTexture {
+    fn value(&self, _u: f64, _v: f64, p: Point3) -> Color {
+        Color::new(1.0, 1.0, 1.0) * self.noise.noise(p)
     }
 }

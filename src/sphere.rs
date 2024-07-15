@@ -3,6 +3,7 @@ use crate::interval::Interval;
 use crate::material::Material;
 use crate::ray::Ray;
 use crate::vec3::*;
+use crate::util;
 use crate::aabb::*;
 use std::sync::Arc;
 pub struct Sphere {
@@ -46,6 +47,13 @@ impl Sphere {
     fn sphere_center(&self, time: f64) -> Point3 {
         self.center1 + self.center_vec * time
     }
+
+    fn get_sphere_uv(p :Point3) -> (f64,f64) {
+        let theta = (-p.y()).acos();
+        let phi = (-p.z()).atan2(p.x()) + util::PI;
+         
+        (phi / (2.0 * util::PI), theta / util::PI)
+    }
 }
 impl Hittable for Sphere {
     fn hit(&self, r: &Ray, ray_t: &Interval, hit_record: &mut HitRecord) -> bool {
@@ -74,6 +82,7 @@ impl Hittable for Sphere {
         hit_record.p = r.at(hit_record.t);
         let outward_normal = (hit_record.p - self.center1) / self.radius;
         hit_record.set_face_normal(r, outward_normal);
+        (hit_record.u, hit_record.v) = Self::get_sphere_uv(outward_normal);
         hit_record.mat = Some(Arc::clone(&self.mat));
         return true;
     }

@@ -1,7 +1,4 @@
 use crate::util::{INFINITY};
-use crate::ray::Ray;
-use crate::hittable::{HitRecord,Hittable};
-use crate::vec3::{Point3, Vec3};
 #[derive(Clone)]
 pub struct Interval {
     pub min: f64,

@@ -56,7 +56,7 @@ impl Default for Camera {
             v:Vec3::default(),
             w:Vec3::default(),
             defocus_angle: 0.0,
-            focus_dist: 0.0,
+            focus_dist: 10.0,
             defocus_disk_u: Vec3::default(),
             defocus_disk_v: Vec3::default(),
         }

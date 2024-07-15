@@ -9,9 +9,11 @@ mod material;
 mod aabb;
 mod texture;
 mod bvh;
+mod rtw_stb_image;
 pub mod util;
 pub mod camera;
-use texture::{SolidColor,Texture,CheckerTexture};
+mod perlin;
+use texture::{SolidColor,Texture,CheckerTexture,ImageTexture,NoiseTexture};
 use bvh::BvhNode;
 use camera::Camera;
 use util::{random_double, random_double_range};
@@ -105,31 +107,28 @@ fn random_spheres(){
 fn two_spheres() {
     let mut world = HittableList::default();
 
-    let checker:Arc::<dyn Texture + Send + Sync> =  Arc::new(CheckerTexture::new_color(0.8, Color::new(0.2, 0.3, 0.1), Color::new(0.9, 0.9, 0.9)));
-
-    let material: Arc<dyn Material> = Arc::new(
-        Lambertian::new_texture(Arc::clone(&checker))
+    let checker1:Arc::<dyn Texture + Send + Sync> = Arc::new(
+        CheckerTexture::new_color(0.32, Color::new(0.95, 0.78, 0.75), Color::new(0.9, 0.9, 0.9))
+    );
+    let checker2:Arc::<dyn Texture + Send + Sync> = Arc::new(
+        CheckerTexture::new_color(0.32, Color::new(0.5, 0.8, 0.8), Color::new(0.9, 0.9, 0.9))
+    );
+    let material1: Arc<dyn Material> = Arc::new(
+        Lambertian::new_texture(Arc::clone(&checker1))
+        );
+    let material2: Arc<dyn Material> = Arc::new(
+        Lambertian::new_texture(Arc::clone(&checker2))
         );
     world.add(Arc::new(Sphere::new(
         Point3::new(0.0, -10.0, 0.0),
         10.0,
-        material
+        material1
     )));
-
-    // world.add( Arc::new(
-    //     Sphere::new(
-    //         Point3::new(0.0, -10.0, 0.0),
-    //         10.0,
-    //          Arc::new(Lambertian::new_texture( Arc::clone(&checker)))
-    //     )
-    // ));
-    // world.add( Arc::new(
-    //     Sphere::new(
-    //         Point3::new(0.0, 10.0, 0.0),
-    //         10.0,
-    //          Arc::new(Lambertian::new_texture( Arc::clone(&checker)))
-    //     )
-    // ));
+    world.add(Arc::new(Sphere::new(
+        Point3::new(0.0, 10.0, 0.0),
+        10.0,
+        material2
+    )));
 
     let mut cam = Camera::default();
 
@@ -144,14 +143,76 @@ fn two_spheres() {
     cam.vup = vec3::Vec3::new(0.0, 1.0, 0.0);
 
     cam.defocus_angle = 0.0;
+    cam.focus_dist = 10.0;
     print!("yyy");
     cam.render(&world);
 }
 
+fn earth() {
+    let earth_texture:Arc::<dyn Texture + Send + Sync> = 
+    Arc::new(ImageTexture::new("earthmap.jpg"));
+    let earth_surface: Arc<dyn Material> = Arc::new(Lambertian::new_texture(Arc::clone(&earth_texture)));
+    let globe = Arc::new(Sphere::new(Point3::new(0.0, 0.0, 0.0), 2.0, earth_surface));
+
+    let mut cam = Camera::default();
+
+    cam.aspect_ratio = 16.0 / 9.0;
+    cam.image_width = 400;
+    cam.samples_per_pixel = 50;
+    cam.max_depth = 10;
+
+    cam.vfov = 20.0;
+    cam.lookfrom = Point3::new(0.0, 0.0, 12.0);
+    cam.lookat = Point3::new(0.0, 0.0, 0.0);
+    cam.vup = vec3::Vec3::new(0.0, 1.0, 0.0);
+
+    cam.defocus_angle = 0.0;
+
+    cam.render(&HittableList::new(globe));
+}
+
+fn two_perlin_spheres() {
+    let mut world = HittableList::default();
+
+    let pertext: Arc::<dyn Texture + Send + Sync> = Arc::new(NoiseTexture::default());
+    world.add(Arc::new(
+        Sphere::new(
+            Point3::new(0.0, -1000.0, 0.0),
+            1000.0,
+            Arc::new(Lambertian::new_texture(Arc::clone(&pertext)))
+        )
+    ));
+    world.add(Arc::new(
+        Sphere::new(
+            Point3::new(0.0, 2.0, 0.0),
+            2.0,
+            Arc::new(Lambertian::new_texture(Arc::clone(&pertext)))
+        )
+    ));
+
+    let mut cam = Camera::default();
+
+    cam.aspect_ratio = 16.0 / 9.0;
+    cam.image_width = 800;
+    cam.samples_per_pixel = 50;
+    cam.max_depth = 10;
+
+    cam.vfov = 20.0;
+    cam.lookfrom = Point3::new(13.0, 2.0, 3.0);
+    cam.lookat = Point3::new(0.0, 0.0, 0.0);
+    cam.vup = vec3::Vec3::new(0.0, 1.0, 0.0);
+
+    cam.defocus_angle = 0.0;
+
+    cam.render(&world);
+}
+
 fn main() {
-    match 2 {
+    match 4 {
         1 => random_spheres(),
         2 => two_spheres(),
+        3 => earth(),
+        4 => two_perlin_spheres(),
         _ => (),
     }
 }
