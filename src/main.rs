@@ -174,7 +174,7 @@ fn earth() {
 fn two_perlin_spheres() {
     let mut world = HittableList::default();
 
-    let pertext: Arc::<dyn Texture + Send + Sync> = Arc::new(NoiseTexture::default());
+    let pertext: Arc::<dyn Texture + Send + Sync> = Arc::new(NoiseTexture::new(4.0));
     world.add(Arc::new(
         Sphere::new(
             Point3::new(0.0, -1000.0, 0.0),

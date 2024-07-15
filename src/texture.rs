@@ -2,6 +2,7 @@ use crate::vec3::Point3;
 use crate::vec3::*;
 use crate::rtw_stb_image::RtwImage;
 use crate::perlin::Perlin;
+use std::default;
 use std::sync::Arc;
 
 pub trait Texture {
@@ -103,13 +104,32 @@ impl Texture for ImageTexture {
     }
 }
 
-#[derive(Default)]
+
 pub struct NoiseTexture {
     noise: Perlin,
+    scale: f64,
+}
+
+impl Default for NoiseTexture {
+    fn default() -> Self {
+        Self {
+            noise: Perlin::default(),
+            scale: 1.0
+        }
+    }
+}
+
+impl NoiseTexture {
+    pub fn new(sc: f64) -> Self {
+        Self {
+            noise: Perlin::default(),
+            scale:sc,
+        }
+    }
 }
 
 impl Texture for NoiseTexture {
     fn value(&self, _u: f64, _v: f64, p: Point3) -> Color {
-        Color::new(1.0, 1.0, 1.0) * self.noise.noise(p)
+        Color::new(0.8, 0.8, 1.0) * 0.5 * (1.0 + self.noise.noise(self.scale * p))
     }
 }
