@@ -143,8 +143,8 @@ impl Camera {
             self.defocus_disk_sample()
         };
         let ray_direction = pixel_sample - ray_origin;
-    
-        Ray::new(ray_origin, ray_direction)
+        let ray_time = random_double();
+        Ray::new_time(ray_origin, ray_direction,ray_time)
     }
 
     pub fn render(&mut self, world: &dyn Hittable) {
@@ -197,54 +197,5 @@ impl Camera {
             Err(_) => println!("Outputting image fails."),
         }
     }
-    // pub fn multi_render(&mut self, world: &dyn Hittable,thread_num:usize) {
-    //     self.initialize();
-
-    //     let path = "output/fast.jpg";
-    //     let quality = 60;
-        // let bar: ProgressBar = if Self::is_ci() {
-        //     ProgressBar::hidden()
-        // } else {
-        //     ProgressBar::new((self.image_height * self.image_width) as u64)
-        // };
-        //多线程：
-        // let multipb = MultiProgress::new();
-        // let mut img: RgbImage = ImageBuffer::new(self.image_width, self.image_height);
-        // let image = Arc::new(Mutex::new(img));
-        // let cam = Arc::new(self);
-        // let mut handles = vec![];
-        // for index in 0..thread_num {
-        //     let c = Arc::clone(&cam);
-        //     let image = Arc::clone(&image);
-            
-        // }
-        // for i in 0..self.image_width {
-        //     for j in 0..self.image_height {
-        //         let pixel_center = self.pixel00_loc + i as f64 * self.pixel_delta_u + j as f64 * self.pixel_delta_v;
-        //         let ray_direction = pixel_center - self.center;
-        //         let r = Ray::new(self.center, ray_direction);
-        //         // let color_vec = Self::ray_color(&r,world);
-        //         let mut color_vec = Vec3::zero();
-        //         for _ in 0..self.samples_per_pixel {
-        //             let r = self.get_ray(i, j);
-        //             color_vec += Self::ray_color(&r, world)/self.samples_per_pixel as f64;
-        //         }
-        //         let pixel_color = [
-        //             (color_vec.x * 255.999) as u8,
-        //             (color_vec.y * 255.999) as u8,
-        //             (color_vec.z * 255.999) as u8,
-        //         ];
-        //         write_color(pixel_color, &mut img, i as usize, j as usize);
-        //         bar.inc(1);
-        //     }
-        // }
-        // bar.finish();
-        // println!("Ouput image as \"{}\"\n Author: {}", path, AUTHOR);
-        // let output_image: image::DynamicImage = image::DynamicImage::ImageRgb8(img);
-        // let mut output_file: File = File::create(path).unwrap();
-        // match output_image.write_to(&mut output_file, image::ImageOutputFormat::Jpeg(quality)) {
-        //     Ok(_) => {}
-        //     Err(_) => println!("Outputting image fails."),
-        // }
-    // }
+   
 }

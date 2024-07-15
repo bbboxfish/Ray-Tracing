@@ -3,6 +3,7 @@ use std::ops::{Add, AddAssign};
 use std::ops::{Sub, SubAssign};
 use std::ops::{Mul, MulAssign};
 use std::ops::{Div, DivAssign};
+use std::ops::{Index, IndexMut};
 use crate::util::{random_double,random_double_range};
 use std::ops::Neg;
 #[derive(Clone, Debug, PartialEq,Copy)]
@@ -21,6 +22,15 @@ impl Vec3 {
     }
     pub fn z(&self) -> f64 {
         self.z
+    }
+    pub fn vis(&self,n :usize) -> f64 {
+        if n == 0 {
+            self.x
+        } else if n == 1 {
+            self.y
+        } else {
+            self.z
+        }
     }
     pub fn new(x: f64, y: f64, z: f64) -> Self {
         Self { x, y, z }
@@ -293,6 +303,29 @@ impl Neg for Vec3 {
         }
     }
 }
+impl Index<usize> for Vec3 {
+    type Output = f64;
+    fn index(&self, idx: usize) -> &f64 {
+        match idx {
+            0 => &self.x,
+            1 => &self.y,
+            2 => &self.z,
+            _ => panic!(),
+        }
+    }
+}
+
+impl IndexMut<usize> for Vec3 {
+    fn index_mut(&mut self, idx: usize) -> &mut Self::Output {
+        match idx {
+            0 => &mut self.x,
+            1 => &mut self.y,
+            2 => &mut self.z,
+            _ => panic!(),
+        }
+    }
+}
+
 pub type Color = Vec3;
 pub type Point3 = Vec3;
 #[cfg(test)]

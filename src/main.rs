@@ -6,9 +6,15 @@ mod sphere;
 mod hittable;
 mod hittable_list;
 mod material;
+mod aabb;
+mod texture;
+mod bvh;
 pub mod util;
 pub mod camera;
+use texture::{SolidColor,Texture,CheckerTexture};
+use bvh::BvhNode;
 use camera::Camera;
+use util::{random_double, random_double_range};
 use crate::material::{Lambertian,Metal,Material};
 use interval::Interval;
 use hittable_list::HittableList;
@@ -17,9 +23,10 @@ use sphere::Sphere;
 use ray::Ray;
 use vec3::{Color,Point3,Vec3};
 use color::write_color;
-use image::{ImageBuffer, RgbImage}; //接收render传回来的图片，在main中文件输出
+use image::{ColorType, ImageBuffer, RgbImage}; //接收render传回来的图片，在main中文件输出
 use indicatif::ProgressBar;
 pub const INFINITY: f64 = std::f64::INFINITY;
+use std::default;
 use std::fs::File;
 use std::sync::Arc;
 const AUTHOR: &str = "box fish";
@@ -29,39 +36,122 @@ fn is_ci() -> bool {
 }
 
 
-fn main() { 
+fn random_spheres(){ 
     let mut world = HittableList::default();
+    let checker:Arc::<dyn Texture + Send + Sync> = Arc::new(
+                CheckerTexture::new_color(0.32, Color::new(0.2, 0.3, 0.1), Color::new(0.9, 0.9, 0.9))
+            );
+    // let material_ground = Arc::new(material::Lambertian::new(Color::new(0.757, 1.0, 0.756)));
+    // world.add(Arc::new(Sphere::new(Point3::new(0.0, -1000.0, -1.0),1000.0,material_ground)));
+    let ground_material: Arc<dyn Material> = Arc::new(
+        Lambertian::new_texture(Arc::clone(&checker))
+        );
+    world.add(Arc::new(Sphere::new(
+        Point3::new(0.0, -1000.0, 0.0),
+        1000.0,
+        ground_material
+    )));
 
-    let r = (util::PI / 4.0).cos();
+    
+    for a in -11 .. 11 {
+        for b in -11 .. 11 {
+            let choose_mat = random_double();
+            let center = Point3::new(a as f64 + 0.9*random_double(),0.2,b as f64+0.9*random_double());
+            
+            if (center-Point3::new(4.0,0.2,0.0)).length() > 0.9 {
+                let mut sphere_material: Arc<dyn Material> = 
+                if choose_mat < 0.8 {
+                    let albedo = Color::random()*Color::random();
+                    Arc::new(material::Lambertian::new(albedo))
+                } else if choose_mat < 0.95{
+                    let albedo = Color::random_range(0.5,1.0);
+                    let fuzz = random_double_range(0.0,0.5);
+                    Arc::new(material::Metal::new(albedo,fuzz))
+                } else {
+                    Arc::new(material::Dielectric::new(1.5))
+                };
+                let center2 = center + vec3::Vec3::new(0.0, util::random_double_range(0.0, 0.5), 0.0);
+                world.add(Arc::new(Sphere::new_center2(center,center2,0.2,sphere_material)));
+            }
+        }
+    }
 
+    let material1 = Arc::new(material::Dielectric::new(1.5));
+    world.add(Arc::new(Sphere::new(Point3::new(0.0,1.0,0.0),1.0,material1)));
 
-    let material_ground = Arc::new(material::Lambertian::new(Color::new(0.757, 1.0, 0.756)));
-    let material_center = Arc::new(material::Lambertian::new(Color::new(0.8, 0.4, 0.3)));
-    let material_left = Arc::new(material::Dielectric::new(1.50));
-    let material_bubble = Arc::new(material::Dielectric::new(1.00/1.50));
-    let material_right = Arc::new(material::Metal::new(Color::new(0.4, 0.7, 0.99),1.0));
-    // let material_right = Arc::new(material::Lambertian::new(Color::new(0.66, 0.5, 0.99)));
-    // let material_left = Arc::new(material::Lambertian::new(Color::new(0.99, 0.5, 0.66)));
+    let material2 = Arc::new(material::Lambertian::new(Color::new(0.4,0.2,0.1)));
+    world.add(Arc::new(Sphere::new(Point3::new(-4.0,1.0,0.0),1.0,material2)));
 
-    world.add(Arc::new(Sphere::new(Point3::new(0.0, -100.5, -1.0),100.0,material_ground,)));
-    world.add(Arc::new(Sphere::new(Point3::new(0.0, 0.0, -1.2),0.5,material_center,)));
-    world.add(Arc::new(Sphere::new(Point3::new(-1.0, -0.0, -1.0),0.5,material_left,)));
-    world.add(Arc::new(Sphere::new(Point3::new(-1.0, -0.0, -1.0),0.4,material_bubble,)));
-    world.add(Arc::new(Sphere::new(Point3::new(1.0, 0.0, -1.0),0.5,material_right,)));
-
-    // world.add(Arc::new(Sphere::new(Point3::new(-r ,-0.0, -1.0),r,material_left,)));
-    // world.add(Arc::new(Sphere::new(Point3::new(r ,-0.0, -1.0),r,material_right,)));
+    let material3 = Arc::new(material::Metal::new(Color::new(0.7,0.7,0.99),0.0));
+    world.add(Arc::new(Sphere::new(Point3::new(4.0,1.0,0.0),1.0,material3)));
+    
+    let bvh_node = Arc::new(BvhNode::new(&mut world));
+    world = HittableList::new(bvh_node);
 
     let mut cam = Camera::default();
     cam.aspect_ratio = 16.0 / 9.0;
-    cam.image_width = 800;
-    cam.samples_per_pixel = 100;
+    cam.image_width = 1200;
+    cam.samples_per_pixel = 1;//500
     cam.max_depth = 50;
     cam.vfov = 20.0;
-    cam.lookat = Point3::new(0.0,0.0,-1.0);
-    cam.lookfrom = Point3::new(-2.0,2.0,1.0);
+    cam.lookat = Point3::new(0.0,0.0,0.0);
+    cam.lookfrom = Point3::new(13.0,2.0,3.0);
     cam.vup = Vec3::new(0.0,1.0,0.0);
-    cam.defocus_angle = 10.0;
-    cam.focus_dist = 3.4;
+    cam.defocus_angle = 0.6;
+    cam.focus_dist = 10.0;
     cam.render(&world);
+}
+
+fn two_spheres() {
+    let mut world = HittableList::default();
+
+    let checker:Arc::<dyn Texture + Send + Sync> =  Arc::new(CheckerTexture::new_color(0.8, Color::new(0.2, 0.3, 0.1), Color::new(0.9, 0.9, 0.9)));
+
+    let material: Arc<dyn Material> = Arc::new(
+        Lambertian::new_texture(Arc::clone(&checker))
+        );
+    world.add(Arc::new(Sphere::new(
+        Point3::new(0.0, -10.0, 0.0),
+        10.0,
+        material
+    )));
+
+    // world.add( Arc::new(
+    //     Sphere::new(
+    //         Point3::new(0.0, -10.0, 0.0),
+    //         10.0,
+    //          Arc::new(Lambertian::new_texture( Arc::clone(&checker)))
+    //     )
+    // ));
+    // world.add( Arc::new(
+    //     Sphere::new(
+    //         Point3::new(0.0, 10.0, 0.0),
+    //         10.0,
+    //          Arc::new(Lambertian::new_texture( Arc::clone(&checker)))
+    //     )
+    // ));
+
+    let mut cam = Camera::default();
+
+    cam.aspect_ratio = 16.0 / 9.0;
+    cam.image_width = 400;
+    cam.samples_per_pixel = 50;
+    cam.max_depth = 10;
+
+    cam.vfov = 20.0;
+    cam.lookfrom = Point3::new(13.0, 2.0, 3.0);
+    cam.lookat = Point3::new(0.0, 0.0, 0.0);
+    cam.vup = vec3::Vec3::new(0.0, 1.0, 0.0);
+
+    cam.defocus_angle = 0.0;
+    print!("yyy");
+    cam.render(&world);
+}
+
+fn main() {
+    match 2 {
+        1 => random_spheres(),
+        2 => two_spheres(),
+        _ => (),
+    }
 }

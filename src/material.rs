@@ -3,6 +3,8 @@ use crate::ray::Ray;
 use crate::vec3::Vec3;
 use crate::Color;
 use crate::util::random_double;
+use crate::texture::{SolidColor, Texture};
+use std::sync::Arc;
 pub trait Material: Send + Sync {
     fn scatter(
         &self,
@@ -13,23 +15,28 @@ pub trait Material: Send + Sync {
     ) -> bool;
 }
 pub struct Lambertian {
-    pub albedo: Color, //反射率
+    pub albedo: Arc<dyn Texture + Send + Sync>,
 }
 
 impl Lambertian {
-    pub fn new(col: Color) -> Self {
-        Self { albedo: col }
+    pub fn new(a: Color) -> Self {
+        Self {
+            albedo: Arc::new(SolidColor::new(a)),
+        }
+    }
+    pub fn new_texture(a: Arc<dyn Texture + Send + Sync>) -> Self {
+        Self { albedo: a }
     }
 }
 
 impl Material for Lambertian {
-    fn scatter(&self, _r_in: &Ray, rec: &HitRecord, attenuation: &mut Color, scattered: &mut Ray) -> bool {
+    fn scatter(&self, r_in: &Ray, rec: &HitRecord, attenuation: &mut Color, scattered: &mut Ray) -> bool {
         let mut scatter_direction = rec.normal + Vec3::random_unit_vector();
         if scatter_direction.near_zero() {//避免随机生成的恰好和法向量相反情况
             scatter_direction = rec.normal;
         }
-        *scattered = Ray::new(rec.p, scatter_direction);
-        *attenuation = self.albedo;//衰减
+        *scattered = Ray::new_time(rec.p, scatter_direction, r_in.tm);
+       *attenuation = self.albedo.value(rec.u, rec.v, rec.p);//衰减
         true
     }
 }
@@ -51,7 +58,7 @@ pub struct Metal {
   impl Material for Metal {
     fn scatter(&self, r_in: &Ray, rec: &HitRecord, attenuation: &mut Color, scattered: &mut Ray) -> bool {
         let reflected = Vec3::reflect(Vec3::unit_vector(r_in.dir), rec.normal);
-        *scattered = Ray::new(rec.p, reflected + self.fuzz * Vec3::random_in_unit_sphere());
+        *scattered = Ray::new_time(rec.p, reflected + self.fuzz * Vec3::random_in_unit_sphere(), r_in.tm);
         *attenuation = self.albedo;
         Vec3::dot(scattered.dir, rec.normal) > 0.0
     }
@@ -92,7 +99,7 @@ impl Material for Dielectric {
             Vec3::refract(unit_direction, rec.normal, refraction_ratio)
         };
 
-        *scattered = Ray::new(rec.p, direction);
+        *scattered = Ray::new_time(rec.p, direction, r_in.tm);
         true
     }
 }
