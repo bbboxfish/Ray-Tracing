@@ -32,6 +32,21 @@ impl Default for Perlin {
 }
 
 impl Perlin {
+
+    pub fn turb(&self, p: Point3, depth: i32) -> f64 {
+        let mut accum = 0.0;
+        let mut temp_p = p;
+        let mut weight = 1.0;
+
+        for _ in 0..depth {
+            accum += weight * self.noise(temp_p);
+            weight *= 0.5;
+            temp_p *= 2.0;
+        }
+
+        accum.abs()
+    }
+
     fn trilinear_interp(c: [[[Vec3; 2]; 2]; 2], u: f64, v: f64, w: f64) -> f64 {
         let uu = u * u * (3.0 - 2.0 * u);
         let vv = v * v * (3.0 - 2.0 * v);

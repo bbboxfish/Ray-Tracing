@@ -28,9 +28,9 @@ impl Interval {
         self.max - self.min
     }
 
-    // pub fn contains(&self, x: f64) -> bool {
-    //     self.min <= x && x <= self.max
-    // }
+    pub fn contains(&self, x: f64) -> bool {
+        self.min <= x && x <= self.max
+    }
 
     pub fn surrounds(&self, x: f64) -> bool {
         self.min < x && x < self.max
@@ -67,4 +67,25 @@ impl Interval {
         min: -INFINITY,
         max: INFINITY,
     };
+}
+impl std::ops::Add<f64> for &Interval {
+    type Output = Interval;
+
+    fn add(self, rhs: f64) -> Self::Output {
+        Interval {
+            min: self.min + rhs,
+            max: self.max + rhs,
+        }
+    }
+}
+
+impl std::ops::Add<&Interval> for f64 {
+    type Output = Interval;
+
+    fn add(self, rhs: &Interval) -> Self::Output {
+        Interval {
+            min: self + rhs.min,
+            max: self + rhs.max,
+        }
+    }
 }

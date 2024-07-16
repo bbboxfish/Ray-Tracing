@@ -5,7 +5,7 @@ use crate::perlin::Perlin;
 use std::default;
 use std::sync::Arc;
 
-pub trait Texture {
+pub trait Texture: Send + Sync {
     fn value(&self, u: f64, v: f64, p: Point3) -> Color;
 }
 
@@ -130,6 +130,8 @@ impl NoiseTexture {
 
 impl Texture for NoiseTexture {
     fn value(&self, _u: f64, _v: f64, p: Point3) -> Color {
-        Color::new(0.8, 0.8, 1.0) * 0.5 * (1.0 + self.noise.noise(self.scale * p))
+        let s = self.scale * p;
+        // Color::new(1.0, 1.0, 1.0) * self.noise.turb(s, 7)
+        Color::new(1.0, 1.0, 1.0) * 0.5 * (1.0 + (s.z() + 10.0 * self.noise.turb(s, 7)).sin())
     }
 }

@@ -1,4 +1,4 @@
-use crate::vec3::Point3;
+use crate::vec3::{Vec3,Point3};
 use crate::interval::*;
 use crate::ray::Ray;
 #[derive(Clone,Default)]
@@ -106,4 +106,50 @@ impl Aabb {
         y: Interval::UNIVERSE,
         z: Interval::UNIVERSE,
     };
+
+    pub fn pad(&self) -> Self {
+        let delta = 0.0001;
+        let new_x = if self.x.size() < delta {
+            self.x.expand(delta)
+        } else {
+            self.x.clone()
+        };
+        let new_y = if self.y.size() < delta {
+            self.y.expand(delta)
+        } else {
+            self.y.clone()
+        };
+        let new_z = if self.z.size() < delta {
+            self.z.expand(delta)
+        } else {
+            self.z.clone()
+        };
+        Self {
+            x: new_x,
+            y: new_y,
+            z: new_z,
+        }
+    }
+}
+impl std::ops::Add<Vec3> for &Aabb {
+    type Output = Aabb;
+    fn add(self,rhs:Vec3) -> Self::Output{
+        Aabb {
+            x: &self.x + rhs.x ,
+            y: &self.y + rhs.y ,
+            z: &self.z + rhs.z ,
+        }
+    }
+}
+
+impl std::ops::Add<&Aabb> for Vec3 {
+    type Output = Aabb;
+
+    fn add(self, rhs: &Aabb) -> Self::Output {
+        Aabb {
+            x: self.x() + &rhs.x,
+            y: self.y() + &rhs.y,
+            z: self.z() + &rhs.z,
+        }
+    }
 }

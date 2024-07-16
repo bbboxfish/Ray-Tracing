@@ -35,6 +35,7 @@ pub struct Camera {
     pub focus_dist: f64,
     defocus_disk_u: Vec3,
     defocus_disk_v: Vec3,
+    pub background: Color,
 }
 impl Default for Camera {
     fn default() -> Self {
@@ -59,29 +60,49 @@ impl Default for Camera {
             focus_dist: 10.0,
             defocus_disk_u: Vec3::default(),
             defocus_disk_v: Vec3::default(),
+            background: Color::default(),
         }
     }
 }
 impl Camera {
-    fn ray_color(r:&Ray,depth: i32,world :&dyn Hittable) -> Color {
+    fn ray_color(&self,r:&Ray,depth: i32,world :&dyn Hittable) -> Color {
         let mut rec = HitRecord::default();
         if depth <= 0 {
             return Color::default();
         }
-        if world.hit(r, &Interval::new(0.001,INFINITY),&mut rec) {
+        // if world.hit(r, &Interval::new(0.001,INFINITY),&mut rec) {
+        //     let mut scattered = Ray::default();
+        //     let mut attenuation = Color::default();
+        //     if let Some(mat) = rec.mat.clone() {
+        //         if mat.scatter(r, &rec, &mut attenuation, &mut scattered) {
+        //             return attenuation * Self::ray_color(&scattered, depth - 1, world);
+        //         }
+        //     }
+        //     return Color::default();
+        // }
+        // let unit_direction = Vec3::unit_vector(r.dir);
+        // let t = 0.5 * (unit_direction.y() + 1.0);
+        // (1.0 - t) * Color::new(1.0, 1.0, 1.0) + t * Color::new(0.5, 0.7, 1.0)
+        if !world.hit(r, &Interval::new(0.001, util::INFINITY), &mut rec) {
+            return self.background;
+        }
+
+        if let Some(mat) = rec.mat.clone() {
             let mut scattered = Ray::default();
             let mut attenuation = Color::default();
-            if let Some(mat) = rec.mat.clone() {
-                if mat.scatter(r, &rec, &mut attenuation, &mut scattered) {
-                    return attenuation * Self::ray_color(&scattered, depth - 1, world);
-                }
+            let color_from_emission = mat.emitted(rec.u, rec.v, rec.p);
+            if !mat.scatter(r, &rec, &mut attenuation, &mut scattered) {
+                return color_from_emission;
             }
-            return Color::default();
+
+            let color_from_scatter = attenuation * self.ray_color(&scattered,  depth - 1, world);
+
+            color_from_emission + color_from_scatter
+        } else {
+            Color::default()
         }
-        let unit_direction = Vec3::unit_vector(r.dir);
-        let t = 0.5 * (unit_direction.y() + 1.0);
-        (1.0 - t) * Color::new(1.0, 1.0, 1.0) + t * Color::new(0.5, 0.7, 1.0)
     }
+
 
     fn initialize(&mut self) {
         self.image_height = 450;
@@ -169,7 +190,7 @@ impl Camera {
                 let mut color_vec = Vec3::zero();
                 for _ in 0..self.samples_per_pixel {
                     let r = self.get_ray(i, j);
-                    color_vec += Self::ray_color(&r,self.max_depth, world)/self.samples_per_pixel as f64;
+                    color_vec += Self::ray_color(self,&r,self.max_depth, world)/self.samples_per_pixel as f64;
                 }
                 color_vec.x = linear_to_gamma(color_vec.x);
                 color_vec.y = linear_to_gamma(color_vec.y);
