@@ -6,8 +6,7 @@ use std::ops::{Div, DivAssign};
 use std::ops::{Index, IndexMut};
 use crate::util::{random_double,random_double_range};
 use std::ops::Neg;
-#[derive(Clone, Debug, PartialEq,Copy)]
-#[derive(Default)]
+#[derive(Clone, Debug, PartialEq,Copy,Default)]
 pub struct Vec3 {
     pub x: f64,
     pub y: f64,

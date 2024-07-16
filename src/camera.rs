@@ -167,7 +167,7 @@ impl Camera {
         let ray_time = random_double();
         Ray::new_time(ray_origin, ray_direction,ray_time)
     }
-
+    
     pub fn render(&mut self, world: &dyn Hittable) {
         self.initialize();
 
@@ -218,5 +218,5 @@ impl Camera {
             Err(_) => println!("Outputting image fails."),
         }
     }
-   
+    
 }

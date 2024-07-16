@@ -14,13 +14,15 @@ pub mod util;
 pub mod camera;
 mod perlin;
 mod qard;
+mod constant_medium;
+use constant_medium::ConstantMedium;
 use qard::Quad;
 use crate::qard::make_box;
 use texture::{SolidColor,Texture,CheckerTexture,ImageTexture,NoiseTexture};
 use bvh::BvhNode;
 use camera::Camera;
 use util::{random_double, random_double_range};
-use crate::material::{Lambertian,Metal,Material,DiffuseLight};
+use crate::material::{Lambertian,Metal,Material,DiffuseLight,Dielectric};
 use interval::Interval;
 use hittable_list::HittableList;
 use hittable::{HitRecord, Hittable, RotateY,Translate};
@@ -438,9 +440,238 @@ fn cornell_box() {
     cam.render(&world);
 }
 
+fn cornell_smoke() {
+    let mut world = HittableList::default();
 
+    let red: Arc<dyn Material> = Arc::new(Lambertian::new(Color::new(0.65, 0.05, 0.05)));
+    let white: Arc<dyn Material> = Arc::new(Lambertian::new(Color::new(0.73, 0.73, 0.73)));
+    let green: Arc<dyn Material> = Arc::new(Lambertian::new(Color::new(0.12, 0.45, 0.15)));
+    let light: Arc<dyn Material> = Arc::new(DiffuseLight::new_with_color(Color::new(7.0, 7.0, 7.0)));
+
+    world.add(Arc::new(
+        Quad::new(
+            Point3::new(555.0, 0.0, 0.0),
+            vec3::Vec3::new(0.0, 555.0, 0.0),
+            vec3::Vec3::new(0.0, 0.0, 555.0),
+            green
+        )
+    ));
+    world.add(Arc::new(
+        Quad::new(
+            Point3::new(0.0, 0.0, 0.0),
+            vec3::Vec3::new(0.0, 555.0, 0.0),
+            vec3::Vec3::new(0.0, 0.0, 555.0),
+            red
+        )
+    ));
+    world.add(Arc::new(
+        Quad::new(
+            Point3::new(113.0, 554.0, 127.0),
+            vec3::Vec3::new(330.0, 0.0, 0.0),
+            vec3::Vec3::new(0.0, 0.0, 305.0),
+            light
+        )
+    ));
+    world.add(Arc::new(
+        Quad::new(
+            Point3::new(0.0, 555.0, 0.0),
+            vec3::Vec3::new(555.0, 0.0, 0.0),
+            vec3::Vec3::new(0.0, 0.0, 555.0),
+            Arc::clone(&white)
+        )
+    ));
+    world.add(Arc::new(
+        Quad::new(
+            Point3::new(0.0, 0.0, 0.0),
+            vec3::Vec3::new(555.0, 0.0, 0.0),
+            vec3::Vec3::new(0.0, 0.0, 555.0),
+            Arc::clone(&white)
+        )
+    ));
+    world.add(Arc::new(
+        Quad::new(
+            Point3::new(0.0, 0.0, 555.0),
+            vec3::Vec3::new(555.0, 0.0, 0.0),
+            vec3::Vec3::new(0.0, 0.0, 555.0),
+            Arc::clone(&white)
+        )
+    ));
+
+    let box1 = make_box(
+        Point3::new(0.0, 0.0, 0.0),
+        Vec3::new(165.0, 330.0, 165.0),
+        Arc::clone(&white)
+    );
+    let box1 = Arc::new(RotateY::new(box1, 15.0));
+    let box1 = Arc::new(Translate::new(box1, vec3::Vec3::new(265.0, 0.0, 295.0)));
+
+    let box2 = make_box(
+        Point3::new(0.0, 0.0, 0.0),
+        Vec3::new(165.0, 165.0, 165.0),
+        Arc::clone(&white)
+    );
+    let box2 = Arc::new(RotateY::new(box2, -18.0));
+    let box2 = Arc::new(Translate::new(box2, vec3::Vec3::new(130.0, 0.0, 65.0)));
+
+    world.add(Arc::new(
+        ConstantMedium::new_with_color(box1, 0.01, Color::new(0.0, 0.0, 0.0))
+    ));
+    world.add(Arc::new(
+        ConstantMedium::new_with_color(box2, 0.01, Color::new(1.0, 1.0, 1.0))
+    ));
+
+    let mut cam = Camera::default();
+
+    cam.aspect_ratio = 1.0;
+    cam.image_width = 400;
+    cam.samples_per_pixel = 100;
+    cam.max_depth = 10;
+    cam.background = Color::default();
+
+    cam.vfov = 40.0;
+    cam.lookfrom = Point3::new(278.0, 278.0, -800.0);
+    cam.lookat = Point3::new(278.0, 278.0, 0.0);
+    cam.vup = vec3::Vec3::new(0.0, 1.0, 0.0);
+
+    cam.defocus_angle = 0.0;
+
+    cam.render(&world);
+}
+
+fn final_scene(image_width: u32, samples_per_pixel: usize, max_depth: i32) {
+    let mut boxes1 = HittableList::default();
+    let ground: Arc<dyn Material> = Arc::new(Lambertian::new(Color::new(0.48, 0.83, 0.53)));
+
+    let boxes_per_side = 20;
+    (0..boxes_per_side).for_each(|i| {
+        (0..boxes_per_side).for_each(|j| {
+        let w = 100.0;
+        let x0 = -1000.0 + i as f64 * w;
+        let z0 = -1000.0 + j as f64 * w;
+        let y0 = 0.0;
+        let x1 = x0 + w;
+        let y1 = util::random_double_range(1.0, 101.0);
+        let z1 = z0 + w;
+
+        boxes1.add(
+            make_box(
+                Point3::new(x0, y0, z0),
+                Point3::new(x1, y1, z1),
+                Arc::clone(&ground)
+            )
+        );
+        });
+    });
+
+    let mut world = HittableList::default();
+
+    world.add(Arc::new(BvhNode::new(&mut boxes1)));
+
+    let light: Arc<dyn Material> = Arc::new(DiffuseLight::new_with_color(Color::new(7.0, 7.0, 7.0)));
+    world.add(Arc::new(
+        Quad::new(
+            Point3::new(123.0, 554.0, 147.0),
+            vec3::Vec3::new(412.0, 0.0, 0.0),
+            vec3::Vec3::new(0.0, 0.0, 412.0),
+            light
+        )
+    ));
+
+    let center1 = Point3::new(400.0, 400.0, 200.0);
+    let center2 = center1 + vec3::Vec3::new(30.0, 0.0, 0.0);
+    let sphere_material: Arc<dyn Material> = Arc::new(Lambertian::new(Color::new(0.7, 0.3, 0.1)));
+    world.add(Arc::new(
+        Sphere::new_center2(center1, center2, 50.0, sphere_material)
+    ));
+
+    world.add(Arc::new(
+        Sphere::new(
+            Point3::new(260.0, 150.0, 45.0),
+            50.0,
+            Arc::new(Dielectric::new(1.5))
+        )
+    ));
+    world.add(Arc::new(
+        Sphere::new(
+            Point3::new(0.0, 150.0, 145.0),
+            50.0,
+            Arc::new(Metal::new(Color::new(0.8, 0.8, 0.9), 1.0))
+        )
+    ));
+
+    let boundary: Arc<dyn Hittable> = Arc::new(Sphere::new(Point3::new(360.0, 150.0, 145.0), 70.0, Arc::new(Dielectric::new(1.5))));
+    world.add(Arc::clone(&boundary));
+    world.add(Arc::new(ConstantMedium::new_with_color(
+        Arc::clone(&boundary),
+        0.2,
+        Color::new(0.2, 0.4, 0.9)
+    )));
+    let boundary: Arc<dyn Hittable> = Arc::new(Sphere::new(Point3::new(0.0, 0.0, 0.0), 5000.0, Arc::new(Dielectric::new(1.5))));
+    world.add(Arc::new(ConstantMedium::new_with_color(
+        Arc::clone(&boundary),
+        0.0001,
+        Color::new(1.0, 1.0, 1.0)
+    )));
+
+    let emat: Arc<dyn Material> = Arc::new(Lambertian::new_texture(Arc::new(ImageTexture::new("earthmap.jpg"))));
+    world.add(Arc::new(
+        Sphere::new(
+            Point3::new(400.0, 200.0, 400.0),
+            100.0,
+            emat
+        )
+    ));
+    let pertext = Arc::new(NoiseTexture::new(0.1));
+    world.add(Arc::new(
+        Sphere::new(
+            Point3::new(220.0, 280.0, 300.0),
+            80.0,
+            Arc::new(Lambertian::new_texture(pertext))
+        )
+    ));
+
+    let mut boxes2 = HittableList::default();
+    let white: Arc<dyn Material> = Arc::new(Lambertian::new(Color::new(0.73, 0.73, 0.73)));
+    let ns = 1000;
+    (0..ns).for_each(|_| {
+        boxes2.add(
+            Arc::new(Sphere::new(
+                Point3::random_range(0.0, 165.0),
+                10.0,
+                Arc::clone(&white)
+            ))
+        );
+    });
+
+    world.add(Arc::new(
+        Translate::new(
+            Arc::new(RotateY::new(
+                Arc::new(BvhNode::new(&mut boxes2)),
+                15.0
+            )),
+            vec3::Vec3::new(-100.0, 270.0, 395.0)
+        )
+    ));
+
+    let mut cam = Camera::default();
+
+    cam.aspect_ratio = 1.0;
+    cam.image_width = image_width;
+    cam.samples_per_pixel = samples_per_pixel;
+    cam.max_depth = max_depth;
+    cam.background = Color::default();
+
+    cam.vfov = 40.0;
+    cam.lookfrom = Point3::new(478.0, 278.0, -600.0);
+    cam.lookat = Point3::new(278.0, 278.0, 0.0);
+    cam.vup = vec3::Vec3::new(0.0, 1.0, 0.0);
+
+    cam.defocus_angle = 0.0;
+
+    cam.render(&world);
+}
 fn main() {
-    match 7 {
+    match 9 {
         1 => random_spheres(),
         2 => two_spheres(),
         3 => earth(),
@@ -448,6 +679,8 @@ fn main() {
         5 => quads(),
         6 => simple_light(),
         7 => cornell_box(),
+        8 => cornell_smoke(),
+        9 => final_scene(400, 200, 10),
         _ => (),
     }
 }
