@@ -15,10 +15,16 @@ impl BvhNode {
     pub fn new(list: &HittableList) -> Self {
         let mut obj = list.objects.clone();
         let l = list.objects.len();
-        println!("{}balls",l);
+        // println!("{}balls",l);
         Self::new_hitables(&mut obj, 0, l)
     }
-
+    pub fn new_boxed(
+        list: &HittableList,
+    ) -> Arc<dyn Hittable + Send + Sync> {
+        let mut obj = list.objects.clone();
+        let l = list.objects.len();
+        Arc::new(BvhNode::new_hitables(&mut obj,0,l))
+    }
     // pub fn new_hitable(src_objects: &mut Vec<Arc<dyn Hittable>>, start: usize, end: usize) -> Self {
     //     let mut bbox = Aabb::default();
     //     src_objects[start..end].iter().for_each(|obj| {

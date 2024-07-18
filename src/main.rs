@@ -15,6 +15,8 @@ pub mod camera;
 mod perlin;
 mod qard;
 mod constant_medium;
+use std::process::Command;
+use std::time::Instant;
 use constant_medium::ConstantMedium;
 use qard::Quad;
 use crate::qard::make_box;
@@ -29,13 +31,14 @@ use hittable::{HitRecord, Hittable, RotateY,Translate};
 use sphere::Sphere;
 use ray::Ray;
 use vec3::{Color,Point3,Vec3};
-use color::write_color;
+use color::{write_color,linear_to_gamma};
 use image::{ColorType, ImageBuffer, RgbImage}; //接收render传回来的图片，在main中文件输出
 use indicatif::ProgressBar;
 pub const INFINITY: f64 = std::f64::INFINITY;
 use std::default;
 use std::fs::File;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use std::thread;
 const AUTHOR: &str = "box fish";
 
 fn is_ci() -> bool {
@@ -107,7 +110,7 @@ fn random_spheres(){
     cam.vup = Vec3::new(0.0,1.0,0.0);
     cam.defocus_angle = 0.6;
     cam.focus_dist = 10.0;
-    cam.render(&world);
+    render(cam,&world);
 }
 
 fn two_spheres() {
@@ -140,7 +143,7 @@ fn two_spheres() {
 
     cam.aspect_ratio = 16.0 / 9.0;
     cam.image_width = 400;
-    cam.samples_per_pixel = 50;
+    cam.samples_per_pixel = 5;
     cam.max_depth = 10;
     cam.background = Color::new(0.7, 0.8, 1.0);
 
@@ -152,12 +155,12 @@ fn two_spheres() {
     cam.defocus_angle = 0.0;
     cam.focus_dist = 10.0;
     print!("yyy");
-    cam.render(&world);
+    render(cam,&world);
 }
 
 fn earth() {
     let earth_texture:Arc::<dyn Texture + Send + Sync> = 
-    Arc::new(ImageTexture::new("earthmap.jpg"));
+    Arc::new(ImageTexture::new("lnl.jpg"));
     let earth_surface: Arc<dyn Material> = Arc::new(Lambertian::new_texture(Arc::clone(&earth_texture)));
     let globe = Arc::new(Sphere::new(Point3::new(0.0, 0.0, 0.0), 2.0, earth_surface));
 
@@ -176,7 +179,7 @@ fn earth() {
 
     cam.defocus_angle = 0.0;
 
-    cam.render(&HittableList::new(globe));
+    render(cam,&HittableList::new(globe));
 }
 
 fn two_perlin_spheres() {
@@ -213,7 +216,7 @@ fn two_perlin_spheres() {
 
     cam.defocus_angle = 0.0;
 
-    cam.render(&world);
+    render(cam,&world);
 }
 
 fn quads() {
@@ -283,7 +286,7 @@ fn quads() {
 
     cam.defocus_angle = 0.0;
 
-    cam.render(&world);
+    render(cam,&world);
 }
 
 fn simple_light() {
@@ -338,7 +341,7 @@ fn simple_light() {
 
     cam.defocus_angle = 0.0;
 
-    cam.render(&world);
+    render(cam,&world);
 }
 
 fn cornell_box() {
@@ -437,7 +440,7 @@ fn cornell_box() {
 
     cam.defocus_angle = 0.0;
 
-    cam.render(&world);
+    render(cam,&world);
 }
 
 fn cornell_smoke() {
@@ -535,7 +538,7 @@ fn cornell_smoke() {
 
     cam.defocus_angle = 0.0;
 
-    cam.render(&world);
+    render(cam,&world);
 }
 
 fn final_scene(image_width: u32, samples_per_pixel: usize, max_depth: i32) {
@@ -668,10 +671,13 @@ fn final_scene(image_width: u32, samples_per_pixel: usize, max_depth: i32) {
 
     cam.defocus_angle = 0.0;
 
-    cam.render(&world);
+    render(cam,&world);
+    // cam.render(&world);
+    
 }
 fn main() {
-    match 9 {
+    let now = Instant::now();
+    match 3 {
         1 => random_spheres(),
         2 => two_spheres(),
         3 => earth(),
@@ -680,7 +686,156 @@ fn main() {
         6 => simple_light(),
         7 => cornell_box(),
         8 => cornell_smoke(),
-        9 => final_scene(400, 200, 10),
+        9 => final_scene(800, 100, 10),
         _ => (),
     }
+    let end = now.elapsed().as_secs();
+    println!("程序运行了 {} 秒", end);
 }
+pub fn render(mut camera:  Camera, world: &HittableList) {
+    camera.initialize();
+
+    let path = "output/test.jpg";
+    let quality = 60;
+    let bar: Arc<ProgressBar> = if Camera::is_ci() {
+        Arc::new(ProgressBar::hidden())
+    } else {
+        Arc::new(ProgressBar::new((camera.image_height * camera.image_width) as u64))
+    };
+    let img = Arc::new(Mutex::new(ImageBuffer::new(
+        camera.image_width.try_into().unwrap(),
+        camera.image_height.try_into().unwrap(),
+    )));
+
+    // let mut img: RgbImage = ImageBuffer::new(self.image_width, self.image_height);
+    
+    let mut handles = vec![];
+    let thread_num = 10;
+    println!("使用{}条线程渲染", thread_num);
+    let world = BvhNode::new_boxed(world);
+
+    let cam_ =  Arc::new(Mutex::new(camera));
+
+    for k in 0..thread_num {
+        let cam = Arc::clone(&cam_);
+        let world = world.clone();
+        let img = img.clone();
+        let bar = bar.clone();
+        // let background_ = cam.background;
+        
+        let handle = thread::spawn(move || {
+            let cam = cam.lock().unwrap();
+            for j in (k * cam.image_height/ thread_num)..((k + 1) * cam.image_height / thread_num) {
+                for i in 0..cam.image_width {
+                    let mut rng: rand::rngs::ThreadRng = rand::thread_rng();
+            let pixel_center = cam.pixel00_loc + i as f64 * cam.pixel_delta_u + j as f64 * cam.pixel_delta_v;
+            let ray_direction = pixel_center - cam.center;
+            let r = Ray::new(cam.center, ray_direction);
+            let mut color_vec = Vec3::zero();
+            for _ in 0..cam.samples_per_pixel {
+                let r = cam.get_ray(i, j);
+                color_vec += Camera::ray_color(&*&cam,&r,cam.max_depth, &*world)/cam.samples_per_pixel as f64;
+            }
+            color_vec.x = linear_to_gamma(color_vec.x);
+            color_vec.y = linear_to_gamma(color_vec.y);
+            color_vec.z = linear_to_gamma(color_vec.z);
+            let pixel_color = [
+                (color_vec.x * 255.999) as u8,
+                (color_vec.y * 255.999) as u8,
+                (color_vec.z * 255.999) as u8,
+            ];
+            write_color(pixel_color, &mut img.lock().unwrap(), i as usize, j as usize);
+            bar.inc(1);
+        }
+    }
+    });
+    handles.push(handle);
+}
+
+    for handle in handles {
+        handle.join().unwrap();
+    }
+
+    bar.finish();
+    println!("Ouput image as \"{}\"\n Author: {}", path, AUTHOR);
+    let output_image: image::DynamicImage = image::DynamicImage::ImageRgb8(Mutex::into_inner(Arc::into_inner(img).unwrap()).unwrap());
+    let mut output_file: File = File::create(path).unwrap();
+    match output_image.write_to(&mut output_file, image::ImageOutputFormat::Jpeg(quality)) {
+        Ok(_) => {}
+        Err(_) => println!("Outputting image fails."),
+    }
+}
+
+// pub fn multi_render(mut camera:  Camera, world: &HittableList)-> ImageBuffer<Rgb<u8>, Vec<u8>> {
+//     camera.initialize();
+    
+//     let bar: Arc<ProgressBar> = if Camera::is_ci() {
+//         Arc::new(ProgressBar::hidden())
+//     } else {
+//         Arc::new(ProgressBar::new((camera.image_height * camera.image_width) as u64))
+//     };
+//     let img: RgbImage = ImageBuffer::new(camera.image_width.try_into().unwrap(), camera.image_height.try_into().unwrap());
+    
+//     // let mut img: RgbImage = ImageBuffer::new(self.image_width, self.image_height);
+    
+//     let mut handles = vec![];
+//     let thread_num = 1;
+//     println!("使用{}条线程渲染", thread_num);
+//     let world = BvhNode::new_boxed(world);
+
+//     let image = Arc::new(Mutex::new(img));
+//     let cam = Arc::new(camera);
+
+//     for k in 0..thread_num {
+//         let cam = Arc::clone(&cam);
+//         let world = world.clone();
+//         let image = Arc::clone(&image);
+//         let bar = bar.clone();
+//         // let background_ = cam.background;
+        
+//         let handle = thread::spawn(move || {
+//             let bar = mpb.add(ProgressBar::new((height * width / threadnum) as u64));
+//             let style = ProgressStyle::with_template(
+//                 "[{elapsed_precise}] {bar:40.red/blue} {pos:>10}/{len:10} {msg}",
+//             )
+//             .unwrap()
+//             .progress_chars("$>");
+//             bar.set_style(style);
+//             for j in (k * cam.image_width / thread_num)..((k + 1) * cam.image_width / thread_num) {
+//                 for i in 0..cam.image_width {
+//                     let mut rng: rand::rngs::ThreadRng = rand::thread_rng();
+//             let pixel_center = cam.pixel00_loc + i as f64 * cam.pixel_delta_u + j as f64 * cam.pixel_delta_v;
+//             let ray_direction = pixel_center - cam.center;
+//             let r = Ray::new(cam.center, ray_direction);
+//             let mut color_vec = Vec3::zero();
+//             for _ in 0..cam.samples_per_pixel {
+//                 let r = cam.get_ray(i, j);
+//                 color_vec += Camera::ray_color(&*&cam,&r,cam.max_depth, &*world)/cam.samples_per_pixel as f64;
+//             }
+//             color_vec.x = linear_to_gamma(color_vec.x);
+//             color_vec.y = linear_to_gamma(color_vec.y);
+//             color_vec.z = linear_to_gamma(color_vec.z);
+//             let pixel_color = [
+//                 (color_vec.x * 255.999) as u8,
+//                 (color_vec.y * 255.999) as u8,
+//                 (color_vec.z * 255.999) as u8,
+//             ];
+//             write_color(pixel_color, &mut img.lock().unwrap(), i as usize, j as usize);
+//             bar.inc(1);
+//         }
+//     }
+//     if !is_ci (){
+//         bar.finish();
+//     }
+//     });
+//     handles.push(handle);
+// }
+
+//     for handle in handles {
+//         handle.join().unwrap();
+//     }
+
+//     let img = image.lock().unwrap();
+//     (*img).clone()
+    
+// }

@@ -1,3 +1,4 @@
+use crate::bvh::BvhNode;
 use crate::vec3::{Vec3,Point3,Color};
 use crate::hittable::{Hittable,HitRecord};
 use crate::ray::Ray;
@@ -8,20 +9,22 @@ use image::{ImageBuffer, RgbImage,Rgb}; //接收render传回来的图片，在ma
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use rand::{rngs::ThreadRng, Rng};
 use std::sync::{Arc, Mutex};
+use crate::hittable_list::HittableList;
 use std::thread;
 use crate::util;
 pub const INFINITY: f64 = std::f64::INFINITY;
 use std::fs::File;
 const INTENSITY: Interval = Interval{ min: 0.0, max: 0.999 };
 const AUTHOR: &str = "box fish";
+#[derive(Clone)]
 pub struct Camera {
     pub aspect_ratio: f64,  
     pub image_width: u32,   
     pub image_height: u32,      
-    center: Point3,       
-    pixel00_loc: Point3,    // (0,0)位置
-    pixel_delta_u: Vec3,    // 向右增量
-    pixel_delta_v: Vec3,    // 向下增量
+    pub center: Point3,       
+    pub pixel00_loc: Point3,    // (0,0)位置
+    pub pixel_delta_u: Vec3,    // 向右增量
+    pub pixel_delta_v: Vec3,    // 向下增量
     pub samples_per_pixel: usize, //每个像素的随机样本计数
     pub max_depth: i32,//反射次数上限
     pub vfov: f64,//垂直视角
@@ -65,7 +68,7 @@ impl Default for Camera {
     }
 }
 impl Camera {
-    fn ray_color(&self,r:&Ray,depth: i32,world :&dyn Hittable) -> Color {
+    pub fn ray_color(&self,r:&Ray,depth: i32,world :&dyn Hittable) -> Color {
         let mut rec = HitRecord::default();
         if depth <= 0 {
             return Color::default();
@@ -104,7 +107,7 @@ impl Camera {
     }
 
 
-    fn initialize(&mut self) {
+    pub fn initialize(&mut self) {
         self.image_height = 450;
 
         self.center = self.lookfrom;
@@ -147,7 +150,7 @@ impl Camera {
         px * self.pixel_delta_u + py * self.pixel_delta_v
     }
 
-    fn defocus_disk_sample(&self) -> Point3 {
+    pub fn defocus_disk_sample(&self) -> Point3 {
         let p = Vec3::random_in_unit_disk();
         self.center + p.x() * self.defocus_disk_u + p.y() * self.defocus_disk_v
     }
@@ -180,6 +183,7 @@ impl Camera {
         };
 
         let mut img: RgbImage = ImageBuffer::new(self.image_width, self.image_height);
+        
         
         for i in 0..self.image_width {
             for j in 0..self.image_height {
@@ -218,5 +222,7 @@ impl Camera {
             Err(_) => println!("Outputting image fails."),
         }
     }
+    
+
     
 }
